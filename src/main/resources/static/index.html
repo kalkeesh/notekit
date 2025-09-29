@@ -1,0 +1,194 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>NoteKit</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+
+        /* Masonry container */
+        #notesList {
+            column-count: 2;
+            column-gap: 1rem;
+        }
+
+        .note-card {
+            cursor: pointer;
+            transition: transform 0.2s;
+            display: inline-block;
+            width: 100%;
+            margin-bottom: 1rem;
+        }
+
+        .note-card:hover {
+            transform: scale(1.02);
+        }
+
+        .modal-fullscreen .modal-content {
+            border-radius: 0;
+        }
+
+        textarea {
+            resize: none;
+        }
+
+        /* Floating Add Button */
+        .add-btn {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1050;
+        }
+
+        /* Password Overlay */
+        #passwordOverlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(248,249,250,0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            flex-direction: column;
+        }
+
+        #passwordOverlay input {
+            width: 250px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Password Overlay -->
+    <div id="passwordOverlay">
+        <h4>Enter Password to Access Notes</h4>
+        <input type="password" id="passwordInput" class="form-control" placeholder="Password">
+        <button id="passwordBtn" class="btn btn-primary mt-2">Unlock</button>
+        <div id="passwordError" class="text-danger mt-2" style="display:none;">Incorrect password!</div>
+    </div>
+
+    <div class="container my-4" id="mainContent" style="display:none;">
+        <h2 class="text-center mb-4">📒 My Notes</h2>
+        <div id="notesList"></div>
+    </div>
+
+    <button class="btn btn-primary rounded-circle p-3 add-btn shadow" onclick="createNote()">
+        <i class="bi bi-plus-lg fs-3"></i>
+    </button>
+
+    <div class="modal fade" id="noteModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-fullscreen">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <input type="text" id="noteTitle" class="form-control border-0 fs-4 fw-bold" placeholder="Title">
+                    <button type="button" class="btn-close ms-2" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <textarea id="noteContent" class="form-control h-100 fs-5" placeholder="Write your note..."></textarea>
+                </div>
+                <div class="modal-footer d-flex justify-content-end">
+                    <button class="btn btn-success" id="saveBtn"><i class="bi bi-check-lg"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const PASSWORD = "1234"; // Hardcoded password
+
+    const overlay = document.getElementById("passwordOverlay");
+    const mainContent = document.getElementById("mainContent");
+    const passwordInput = document.getElementById("passwordInput");
+    const passwordBtn = document.getElementById("passwordBtn");
+    const passwordError = document.getElementById("passwordError");
+
+    passwordBtn.addEventListener("click", () => {
+        if(passwordInput.value === PASSWORD) {
+            overlay.style.display = "none";
+            mainContent.style.display = "block";
+            loadNotes();
+        } else {
+            passwordError.style.display = "block";
+        }
+    });
+
+    let notes = [];
+    let currentNoteId = null;
+    let isNewNote = false;
+
+    async function loadNotes() {
+        const res = await fetch("/api/notes");
+        notes = await res.json();
+        displayNotes();
+    }
+
+    function displayNotes() {
+        const list = document.getElementById("notesList");
+        list.innerHTML = "";
+        notes.forEach(note => {
+            const card = document.createElement("div");
+            card.className = "card note-card p-3 shadow-sm";
+            card.onclick = () => openNote(note.id);
+            card.innerHTML = `
+                <h5 class="mb-1">${note.title}</h5>
+                <p class="text-muted small">${note.content.replace(/\n/g, "<br>")}</p>
+            `;
+            list.appendChild(card);
+        });
+    }
+
+    function openNote(id) {
+        const note = notes.find(n => n.id === id);
+        currentNoteId = id;
+        isNewNote = false;
+        document.getElementById("noteTitle").value = note.title;
+        document.getElementById("noteContent").value = note.content;
+        const modal = new bootstrap.Modal(document.getElementById("noteModal"));
+        modal.show();
+    }
+
+    function createNote() {
+        currentNoteId = null;
+        isNewNote = true;
+        document.getElementById("noteTitle").value = "";
+        document.getElementById("noteContent").value = "";
+        const modal = new bootstrap.Modal(document.getElementById("noteModal"));
+        modal.show();
+    }
+
+    document.getElementById("saveBtn").addEventListener("click", async () => {
+        const noteData = {
+            title: document.getElementById("noteTitle").value,
+            content: document.getElementById("noteContent").value
+        };
+        if (isNewNote) {
+            await fetch(`/api/notes`, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(noteData)
+            });
+        } else {
+            await fetch(`/api/notes/${currentNoteId}`, {
+                method: "PUT",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(noteData)
+            });
+        }
+        await loadNotes();
+        bootstrap.Modal.getInstance(document.getElementById("noteModal")).hide();
+    });
+</script>
+</body>
+</html>
